@@ -1,0 +1,59 @@
+<lever name="foveated-read" id="L0" leverage="highest" replaces="lexical-minification">
+  <problem>
+    Lexical minification (strip comments, collapse whitespace) targets the
+    cheap 10-20% of tokens and removes high-density comprehension signal.
+    The expensive waste is boilerplate, repetition, and re-reads.
+  </problem>
+  <strategy>
+    Layered retrieval. Read an outline first, raw ranges second, full file only
+    if required. Deduplicate repeated blocks at repo level. Memoize reads by
+    content hash.
+  </strategy>
+  <protocol>
+    <layer n="0" name="manifest">File tree, sizes, content hashes. Once per session.</layer>
+    <layer n="1" name="outline">Exports, signatures, types, line ranges.
+      Bodies collapsed. Repeated blocks replaced with references.
+      ~10-15% of file tokens.</layer>
+    <layer n="2" name="working-set">Raw source of named line ranges.
+      Full fidelity. This is what the agent edits.</layer>
+    <layer n="3" name="full-file">Raw source. Only when L2 is insufficient.</layer>
+  </protocol>
+  <commands>
+    <cmd>outline &lt;path&gt;        -> L1 outline with line ranges and refs</cmd>
+    <cmd>read &lt;path&gt;:&lt;start&gt;-&lt;end&gt; -> L2 raw range</cmd>
+    <cmd>read &lt;path&gt;           -> L3 raw, with a warning that L1 exists</cmd>
+    <cmd>resolve &lt;ref&gt;        -> expand a dedup reference</cmd>
+    <cmd>read-status &lt;path&gt;    -> "already read, unchanged" or "changed since turn N"</cmd>
+  </commands>
+  <baseline_command>
+    # Measure current read volume
+    # Sum of file sizes read in the session, in bytes / 4 for token estimate.
+    # Record: total files read, total bytes, re-read count.
+  </baseline_command>
+  <verification_command>
+    # After enabling foveated-read, run the same task.
+    # Success: >= 50% reduction in bytes read, zero re-reads of unchanged files,
+    # and the agent edited raw L2 source (not an outline).
+  </verification_command>
+  <safety_gates>
+    <gate>Edits always operate on L2/L3 raw source. Never on an outline.</gate>
+    <gate>Dedup references must be resolvable. If resolve fails, fall back to raw.</gate>
+    <gate>Hash check on every read. Stale memo is a correctness bug, not a nuisance.</gate>
+    <gate>If the repo has no AST parser for the language, fall back to L3 raw.
+      Do not fake an outline with regex.</gate>
+    <gate>Never dedup across trust boundaries (secrets, keys, credentials).
+      These must remain inline or be redacted, never referenced.</gate>
+  </safety_gates>
+  <tools>
+    <tool name="Tree-sitter" type="parser">Required for L1 outlines.
+      grammars per language. vix is the reference implementation.</tool>
+    <tool name="ripgrep + sqlite FTS5" type="index">For dedup and resolve.</tool>
+  </tools>
+  <trade_offs>
+    <trade>Adds a parser dependency (breaks "zero-dep" claim).</trade>
+    <trade>Requires agent cooperation to request ranges.</trade>
+    <trade>Dedup breaks naive grep; resolve command required.</trade>
+    <trade>Savings compound with repo size and session length — opposite of
+      per-file minification, which is flat.</trade>
+  </trade_offs>
+</lever>
