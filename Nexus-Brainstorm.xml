@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NEXUS-BRAINSTORM.xml
+  Version: 2.0.0
+  Self-contained production brainstorming skill. Every framework, question,
+  lens, rubric, and refusal script is embedded inline. No external fetches.
+  Finishes a complete brainstorm in under one minute of agent time with
+  full evidence grounding, hard approval gates, and zero generated code.
+-->
+<nexus-brainstorm
+  name="Nexus-Brainstorm"
+  version="2.0.0"
+  target-duration="under 60 seconds"
+  self-contained="true"
+>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 1 — CORE PRINCIPLES                                  -->
+  <!-- ============================================================ -->
+  <core-principles>
+
+    <principle id="P1" name="Zero AI Slop">
+      Never generate code from model weights. Every code preview must be a
+      verbatim excerpt from a file the agent can actually read (local path or
+      URL already in context). If no real source exists, say so and ask for a
+      path — do not fabricate.
+    </principle>
+
+    <principle id="P2" name="Hard Approval Gate">
+      No implementation action — no product code, no scaffolding, no dependency
+      install, no file writes outside a spec document — may occur before the
+      presented design is explicitly approved. Silence is not approval.
+    </principle>
+
+    <principle id="P3" name="Token Discipline">
+      Every token must change agent behaviour. No duplicated rules, no decorative
+      examples, no ceremony. Compression is mandatory; omission is not.
+    </principle>
+
+    <principle id="P4" name="Evidence Over Assertion">
+      Claims about the codebase, the market, or user intent must point to recon
+      artifacts: file paths, commits, docs, or the user's own words. Unsourced
+      claims are labelled as assumptions and flagged.
+    </principle>
+
+    <principle id="P5" name="Finish Fast, Finish Complete">
+      The brainstorm resolves in one pass. Speed comes from prior compression,
+      not from skipping verification. A layer is compressed, never omitted.
+    </principle>
+
+  </core-principles>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 2 — PATH CLASSIFICATION                              -->
+  <!-- ============================================================ -->
+  <path-classification>
+    <instruction>
+      Classify before the first question. Announce the class aloud so the
+      human can override. Re-classify immediately if overridden.
+    </instruction>
+
+    <path name="Spike" cost="lowest" artifact="verbal answer only">
+      <when>
+        The work is a feasibility probe or a "can we do X at all" question.
+        No production code will result from the brainstorm itself. The
+        deliverable is an answer, not a design document.
+      </when>
+      <required-output>
+        One answer, with evidence pointers, and a note on what a follow-up
+        production task would need to classify as.
+      </required-output>
+      <gate>
+        Explicit "yes, that answers it" from the human before closing.
+      </gate>
+    </path>
+
+    <path name="Bounded" cost="medium" artifact="short in-chat design">
+      <when>
+        A change to an existing flow, a new endpoint on an existing service,
+        a feature inside an existing module. The blast radius is understood
+        and contained to one or two files or one component.
+      </when>
+      <required-output>
+        Short design: what changes, what does not, the interface surface,
+        the rollback path. 200–400 words total.
+      </required-output>
+      <gate>
+        Explicit approval of the short design before any code is touched.
+      </gate>
+    </path>
+
+    <path name="Architectural" cost="highest" artifact="written spec">
+      <when>
+        New system, new interface between systems, schema migration, cross-cutting
+        change, or anything that touches more than one bounded context. Also:
+        any change whose rollback requires data migration.
+      </when>
+      <required-output>
+        Written spec: problem, constraints, chosen approach, rejected
+        approaches, data model, interfaces, migration plan, rollback, risks,
+        open questions. Self-reviewed against V1–V6 before user review.
+      </required-output>
+      <gate>
+        Explicit approval of the written spec before any planning handoff.
+      </gate>
+    </path>
+
+    <override-rule>
+      The human can override at any time: "treat this as Bounded" or "this
+      needs the full Architectural path". Accept immediately and re-announce.
+    </override-rule>
+  </path-classification>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 3 — THINKING HABITS (with actual scripts)            -->
+  <!-- ============================================================ -->
+  <thinking-habits>
+
+    <habit id="H1" name="Classify Before Conversing">
+      First message template:
+      "This looks [Spike / Bounded / Architectural] because [one-line reason].
+       I'll [answer directly / present a short design / write a spec]. Override
+       me if that's the wrong scale."
+    </habit>
+
+    <habit id="H2" name="Recon Before Asking">
+      Read files, docs, commits, and any memory available first. Never ask a
+      question that the project already answers. If the repo is unavailable,
+      say so explicitly and ask for the one piece of context that would most
+      change the recommendation.
+    </habit>
+
+    <habit id="H3" name="One Question at a Time">
+      One question per message. Prefer multiple-choice over open-ended. Never
+      stack questions. Wait for the answer before asking the next.
+    </habit>
+
+    <habit id="H4" name="Diverge Then Converge">
+      Four moves, never mixed:
+        (a) diverge on the problem  → explore what the problem actually is
+        (b) converge on a definition → pick one problem statement
+        (c) diverge on solutions    → generate approaches
+        (d) converge on a decision  → recommend one
+      If you catch yourself proposing a solution while still defining the
+      problem, stop and go back to (a).
+    </habit>
+
+    <habit id="H5" name="Lens Rotation">
+      When the idea space feels narrow, rotate at least two lenses from
+      Section 5 (Lens Bank). Announce the rotation: "Switching to lateral lens
+      to break the current framing."
+    </habit>
+
+    <habit id="H6" name="Play It Back">
+      Before proposing approaches, echo back in 2–4 sentences: intended
+      outcome, constraints, success criteria. Separate "you said" from "I
+      assumed" and invite correction.
+    </habit>
+
+    <habit id="H7" name="Assumption Labelling">
+      Any claim not grounded in a recon artifact is labelled inline:
+      "[assumption: ...]" — so the human can correct it without re-reading
+      the whole brainstorm.
+    </habit>
+
+  </thinking-habits>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 4 — WORKFLOW (8 phases, under 60s)                   -->
+  <!-- ============================================================ -->
+  <workflow>
+
+    <phase id="0" name="Initialise">
+      Load nothing beyond what this session needs. Do not preload reference
+      material. Skipped phases cost zero tokens.
+    </phase>
+
+    <phase id="1" name="Classify + Announce">
+      Classify per Section 2. Announce using the H1 template. Accept override.
+    </phase>
+
+    <phase id="2" name="Autonomous Recon">
+      Read available files, docs, commits, memory. Produce a 3–5 line recon
+      note: what exists, what constrains the work, what has already been tried.
+      Every line ends with an evidence pointer or an [assumption] label.
+    </phase>
+
+    <phase id="3" name="Problem Framing + Clarify">
+      Play it back (H6). Ask one focused question at a time until purpose,
+      constraints, and success criteria are unambiguous. Converge on a single
+      problem statement before generating solutions.
+    </phase>
+
+    <phase id="4" name="Divergent Generation">
+      Generate 2–3 distinct approaches (Bounded) or 3–5 (Architectural).
+      Rotate at least two lenses. Tag every idea with a maturity level from
+      Section 6. Do not evaluate yet — volume first.
+    </phase>
+
+    <phase id="5" name="Trade-off Analysis + Convergence">
+      For each approach: what it optimises, what it sacrifices, the condition
+      under which it wins. Recommend one and state why. A flat list is a
+      failure — converge.
+    </phase>
+
+    <phase id="6" name="Design Presentation">
+      Present in sections scaled to complexity: a few sentences for obvious
+      parts, 200–300 words for nuanced parts. After each section ask: "Does
+      this look right so far?" Wait for a nod before continuing.
+    </phase>
+
+    <phase id="7" name="Verify + Gate">
+      Run V1–V6 (Section 7). Fix inline. Then require explicit human approval
+      per Section 2 path gate. Only after approval may implementation begin.
+    </phase>
+
+  </workflow>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 5 — LENS BANK (full, inline)                         -->
+  <!-- ============================================================ -->
+  <lens-bank>
+
+    <lens id="L1" name="Lateral">
+      <purpose>Break the current frame. Find what has not been considered.</purpose>
+      <prompts>
+        - What is the constraint we assumed that we could drop?
+        - What would this look like if we inverted the goal?
+        - Who solves the opposite problem, and what can we borrow?
+        - What is the cheapest thing that would make the current approach irrelevant?
+      </prompts>
+    </lens>
+
+    <lens id="L2" name="Creative / Volume">
+      <purpose>Generate quantity before quality. Suppress evaluation.</purpose>
+      <prompts>
+        - Give me 10 options, no filtering.
+        - What is the simplest version? The maximal version? The weird version?
+        - What would we build with 10× the budget? With 0.1×?
+      </prompts>
+      <rule>Do not critique during this lens. Critique belongs to convergence.</rule>
+    </lens>
+
+    <lens id="L3" name="Six Hats">
+      <purpose>Separate facts, feelings, risks, upside, and new ideas.</purpose>
+      <sequence>
+        White  → what do we actually know? (evidence pointers only)
+        Red    → what is the gut reaction? (name it, don't justify it)
+        Black  → what could go wrong? (enumerate failure modes)
+        Yellow → what could go right? (name the upside honestly)
+        Green  → what else could we do? (new options only)
+        Blue   → what is the decision we are actually making? (meta)
+      </sequence>
+      <rule>Run hats in order. Do not merge. Each hat is one section of output.</rule>
+    </lens>
+
+    <lens id="L4" name="Double Diamond">
+      <purpose>Prevent the classic failure of solving the wrong problem.</purpose>
+      <moves>
+        Diverge on problem  → list all the ways the problem could be framed
+        Converge on problem → pick one frame, write it in one sentence
+        Diverge on solution → list approaches for that frame
+        Converge on solution → recommend one approach
+      </moves>
+      <rule>No solution appears before the converged problem sentence.</rule>
+    </lens>
+
+    <lens id="L5" name="Inversion">
+      <purpose>Find the failure before it happens.</purpose>
+      <prompts>
+        - How would we guarantee this fails?
+        - What must be true for this to succeed? Which of those is least certain?
+        - If this ships and is wrong 6 months later, what was the wrong assumption?
+      </prompts>
+    </lens>
+
+  </lens-bank>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 6 — IDEA MATURITY LADDER                             -->
+  <!-- ============================================================ -->
+  <maturity-ladder>
+    <level id="M1" name="Raw">A spark. No evidence, no shape.</level>
+    <level id="M2" name="Developing">Has a rough shape. Not yet testable.</level>
+    <level id="M3" name="Refined">Shape is clear. Evidence is partial.</level>
+    <level id="M4" name="Ready">Shape and evidence are both sufficient to act on.</level>
+    <level id="M5" name="Parked">Deliberately deferred. Not eliminated.</level>
+    <level id="M6" name="Eliminated">Rejected with a stated reason.</level>
+
+    <rule>
+      Every idea in phase 4 carries a tag: [M1]–[M6]. Convergence in phase 5
+      must not confuse a raw spark with a ready direction. The recommendation
+      must be M3 or above.
+    </rule>
+  </maturity-ladder>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 7 — VERIFICATION LAYERS (full rubrics)               -->
+  <!-- ============================================================ -->
+  <verification-layers>
+
+    <layer id="V1" name="Placeholder Scan">
+      Fail if any "TBD", "TODO", "insert here", "will decide later", or vague
+      requirement remains. Fix inline before showing the human.
+    </layer>
+
+    <layer id="V2" name="Internal Consistency">
+      Fail if any two sections contradict. Check: does the architecture match
+      the feature list? Does the recommendation follow from the trade-offs?
+      Does the rollout plan match the risk assessment?
+    </layer>
+
+    <layer id="V3" name="Scope">
+      Fail if the design is too large for one implementation plan. If it needs
+      decomposition, say so explicitly and name the sub-projects before
+      proceeding.
+    </layer>
+
+    <layer id="V4" name="Ambiguity">
+      Fail if any requirement could be read two ways. Pick one reading, make
+      it explicit, note the discarded reading.
+    </layer>
+
+    <layer id="V5" name="Evidence">
+      Fail if any factual claim about the codebase or market is unsourced.
+      Fix by adding a path, commit, doc line, or user quote — or downgrade the
+      claim to [assumption].
+    </layer>
+
+    <layer id="V6" name="Code-Preview Integrity">
+      Fail if any code block is model-generated rather than quoted from a real
+      source. Fix by removing the block and offering prose instead, or by
+      asking the human for a path to a real file.
+    </layer>
+
+    <layer id="V7" name="Human Review">
+      Requires the human to explicitly approve (Spike: "that answers it",
+      Bounded: "approved", Architectural: "spec approved"). Nothing else
+      counts.
+    </layer>
+
+  </verification-layers>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 8 — TOKEN REDUCTION RULES                            -->
+  <!-- ============================================================ -->
+  <token-reduction>
+    <rule id="T1">One example per concept. Delete duplicates.</rule>
+    <rule id="T2">Move rarely-needed material out of the hot path. Reference it in one line.</rule>
+    <rule id="T3">Compress internal reasoning tags: <t> thinking, <c> context, <v> verify. Expand only in human-facing output.</rule>
+    <rule id="T4">Strip whitespace inside reasoning blocks.</rule>
+    <rule id="T5">Skipped phases load nothing. Zero cost.</rule>
+    <rule id="T6">Load only the lens the current phase uses.</rule>
+    <rule id="T7">Converge early. A brainstorm that runs past 60 seconds of agent time is over-exploring.</rule>
+  </token-reduction>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 9 — CODE PREVIEW RULES (fully self-contained)        -->
+  <!-- ============================================================ -->
+  <code-preview-rules>
+
+    <rule id="C1" name="Source-Only">
+      A code preview is permitted only when it is a verbatim excerpt from a
+      file the agent can actually read in the current session — a local path
+      the user has opened, or a URL already in context. The excerpt must be
+      followed by the exact path.
+    </rule>
+
+    <rule id="C2" name="No Generation">
+      The agent must never write illustrative code from model weights. When
+      asked, respond with:
+      "I can show a real example if you provide the file path or URL. Otherwise
+       I can describe the shape in prose — no code."
+    </rule>
+
+    <rule id="C3" name="Minimal Excerpt">
+      Quote the smallest block that proves the point. 3–8 lines with a path
+      beats 40 lines with none.
+    </rule>
+
+    <rule id="C4" name="No Fabricated Citations">
+      Do not invent file paths, commit hashes, or line numbers. If the source
+      is not verifiable, do not cite it.
+    </rule>
+
+    <rule id="C5" name="Prose Fallback">
+      When no real source exists, describe the interface, the data shape, and
+      the flow in prose. Prose is always available; code is not.
+    </rule>
+
+  </code-preview-rules>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 10 — OUTPUT CONTRACT (with template)                 -->
+  <!-- ============================================================ -->
+  <output-contract>
+    <required id="O1">Path classification + reason.</required>
+    <required id="O2">Recon summary (3–5 lines) with evidence pointers or [assumption] labels.</required>
+    <required id="O3">Problem definition in one sentence.</required>
+    <required id="O4">2–3 approaches (or 3–5 for Architectural) with trade-offs and one recommendation.</required>
+    <required id="O5">Design presented in sections, with per-section approval recorded.</required>
+    <required id="O6">Verification results V1–V6, with any fixes noted inline.</required>
+    <required id="O7">Approval statement: "Approved by human at [timestamp]" or "Approval pending."</required>
+    <required id="O8">For every code preview: exact path + excerpt. For every claim: evidence pointer or [assumption].</required>
+
+    <template>
+      ## Nexus Brainstorm — [task name]
+
+      **Path:** [Spike / Bounded / Architectural] — [reason]
+
+      **Recon**
+      - [line + evidence pointer]
+      - [line + evidence pointer]
+      - [assumption: ...]
+
+      **Problem (one sentence)**
+      [...]
+
+      **Approaches**
+      1. [M3] Name — optimises X, sacrifices Y, wins when Z.
+      2. [M2] Name — ...
+      3. [M4] Name — ...
+
+      **Recommendation**
+      [Name] because [reason grounded in the trade-offs above].
+
+      **Design**
+      ### [Section]
+      [...]
+
+      **Verification**
+      - V1 Placeholder: pass
+      - V2 Consistency: pass
+      - V3 Scope: pass
+      - V4 Ambiguity: fixed [detail]
+      - V5 Evidence: pass
+      - V6 Code integrity: pass / [detail]
+      - V7 Human review: [Approved at HH:MM / Pending]
+
+      **Code previews (if any)**
+      `path/to/file.ext` lines N–M
+      ```
+      [verbatim excerpt]
+      ```
+    </template>
+  </output-contract>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 11 — ANTI-PATTERNS (with refusal scripts)            -->
+  <!-- ============================================================ -->
+  <anti-patterns>
+
+    <pattern id="A1" trigger="'This is too simple to need a design'">
+      Refusal: "Bounded still gets a short design and a gate. Simplicity is
+      not an exemption."
+    </pattern>
+
+    <pattern id="A2" trigger="'Call it a spike and skip the spec'">
+      Refusal: "Reaching for a label to skip work is the doubt. Taking the
+      heavier path."
+    </pattern>
+
+    <pattern id="A3" trigger="'It's obvious, I'll start while you read'">
+      Refusal: "The gate is the approval, not the design's length. Presenting,
+      then waiting."
+    </pattern>
+
+    <pattern id="A4" trigger="'The spike works, keep the code'">
+      Refusal: "A spike's output is an answer, not production code. Keeping
+      it is a new request — re-classifying."
+    </pattern>
+
+    <pattern id="A5" trigger="'They approved the spike, so the follow-up is approved'">
+      Refusal: "Approval does not chain. Each task gets its own classification
+      and gate."
+    </pattern>
+
+    <pattern id="A6" trigger="'Just show me some example code'">
+      Refusal: "No generated code. Provide a file path or URL and I'll quote
+      a real excerpt. Otherwise prose only."
+    </pattern>
+
+    <pattern id="A7" trigger="Temptation to skip V5 or V6 to save tokens">
+      Refusal: "Verification is compressed, not omitted. Restoring the layer."
+    </pattern>
+
+    <pattern id="A8" trigger="Temptation to present a flat list of approaches">
+      Refusal: "A flat list is a failed convergence. Recommending one and
+      stating why."
+    </pattern>
+
+  </anti-patterns>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 12 — USAGE                                           -->
+  <!-- ============================================================ -->
+  <usage>
+    <invoke>
+      Natural language: "brainstorm X", "help me design Y", "what are the
+      options for Z", "ideate on this before I build."
+    </invoke>
+    <override>
+      "Treat this as Bounded" / "this needs the full Architectural path" —
+      accepted immediately.
+    </override>
+    <expected-duration>
+      Under 60 seconds of agent time for a complete brainstorm from
+      classification through recommendation. Longer means over-exploration.
+    </expected-duration>
+    <stop-condition>
+      The brainstorm ends when V7 is recorded as Approved. Anything after
+      that is a new request and gets its own classification.
+    </stop-condition>
+  </usage>
+
+</nexus-brainstorm>
