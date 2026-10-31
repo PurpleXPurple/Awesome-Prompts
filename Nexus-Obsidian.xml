@@ -1,0 +1,751 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<skill name="Nexus-Obsidian" version="2.1.0" scope="writing" target="obsidian">
+
+  <!-- ============================================================
+       METADATA
+       ============================================================ -->
+
+  <description>
+    Obsidian writing skill. Detects language, enforces grammar and
+    register, strips AI slop, formats valid Obsidian Markdown, applies
+    restrained HTML/CSS. Seven languages plus fallback.
+  </description>
+
+  <triggers positive="true">
+    <trigger>write a note</trigger>
+    <trigger>create a note</trigger>
+    <trigger>draft in obsidian</trigger>
+    <trigger>edit this note</trigger>
+    <trigger>format for obsidian</trigger>
+    <trigger>rewrite this note</trigger>
+  </triggers>
+
+  <triggers positive="false">
+    <trigger>refactor this code</trigger>
+    <trigger>explain this function</trigger>
+    <trigger>review my commit</trigger>
+    <trigger>generate tests</trigger>
+  </triggers>
+
+  <priority value="80" scale="0-100">
+    Beats generic writing skills at 50. Yields to any skill the user names.
+  </priority>
+
+  <!-- ============================================================
+       EXECUTION ORDER
+       ============================================================ -->
+
+  <execution-order>
+    <step ref="L1">Detect language, strip neutral zones.</step>
+    <step ref="L2+L3">Grammar and register, jointly.</step>
+    <step ref="L4">Script, direction, bidi.</step>
+    <step ref="L5">Terminology ledger.</step>
+    <step ref="L6">Mechanics: numbers, dates, units, quotes, hyphens.</step>
+    <step ref="L7">Tone: profanity, irony, humor.</step>
+    <step ref="S1">Strip anti-slop before any formatting.</step>
+    <step ref="O1">Obsidian Markdown.</step>
+    <step ref="H1">HTML/CSS with degradation path.</step>
+    <step ref="V1">Verify. Fix blockers. Do not loop more than twice.</step>
+  </execution-order>
+
+  <!-- ============================================================
+       LANGUAGES
+       ============================================================ -->
+
+  <languages>
+    <supported code="en" default-variant="en-US"/>
+    <supported code="es" default-variant="es-419"/>
+    <supported code="fr" default-variant="fr-FR"/>
+    <supported code="de" default-variant="de-DE"/>
+    <supported code="ar" default-variant="ar-MSA"/>
+    <supported code="ja" default-variant="ja-JP"/>
+    <supported code="zh" default-variant="zh-Hans"/>
+
+    <variants>
+      <variant code="en-US">serial comma on, double quotes, color.</variant>
+      <variant code="en-GB">serial comma off, single quotes outer, colour.</variant>
+      <variant code="es-ES">vosotros, ordenador.</variant>
+      <variant code="es-419">ustedes, voseo optional, computadora.</variant>
+      <variant code="fr-FR">NBSP before double punctuation.</variant>
+      <variant code="fr-CA">OQLF terminology.</variant>
+      <variant code="de-DE">ß in force.</variant>
+      <variant code="de-CH">no ß, always ss.</variant>
+      <variant code="ar-EG">ج → g; ازاي، خلاص، كده، مش.</variant>
+      <variant code="ar-LEV">شو، هلق، كيفك، منيح.</variant>
+      <variant code="ar-GLF">شلون، وايد، ابشر، عيل.</variant>
+      <variant code="zh-Hans">mainland vocabulary, simplified.</variant>
+      <variant code="zh-Hant">Taiwan/HK vocabulary, traditional.</variant>
+    </variants>
+
+    <rule>Never mix variants inside one note.</rule>
+
+    <mixed-language>
+      <weighting>Latin word 1.0 · CJK char 1.7 · Arabic word 1.1 · digits and punctuation 0.</weighting>
+      <rule>Dominant language governs the body. Foreign spans preserved verbatim unless translation is requested.</rule>
+      <rule>Intra-sentence code-switching: preserve both, mark the foreign span with lang attribute.</rule>
+      <rule>Three or more languages in one paragraph: flag once, continue in the dominant one.</rule>
+    </mixed-language>
+
+    <neutral-zones>
+      Strip before detection: fenced code, inline code, URLs, math, wikilink targets, emoji, hashtags, frontmatter keys.
+    </neutral-zones>
+  </languages>
+
+  <!-- ============================================================
+       L1 — DETECTION
+       ============================================================ -->
+
+  <skill id="L1" name="Language Detection">
+    <procedure>
+      <step>Strip neutral zones.</step>
+      <step>Score by script ratio, diacritics, function words, n-grams.</step>
+      <step>Apply disambiguation below.</step>
+      <step>Confidence ≥ 0.80 → lock.</step>
+      <step>0.50–0.79 with a language named by the user → use it.</step>
+      <step>0.50–0.79 unnamed → ask one short question, then proceed. One question total, ever.</step>
+      <step>Below 0.50 → F1.</step>
+    </procedure>
+
+    <disambiguation>
+      <case input="hanzi only">
+        Simplified-only forms (门见马) → zh-Hans.
+        Traditional-only forms (門見馬) → zh-Hant.
+        Shared forms only → confidence 0.55, ask.
+      </case>
+      <case input="hanzi plus kana">ja, confidence 0.95.</case>
+      <case input="romanized Latin">
+        Hepburn patterns (shu, tte, desu, masu) → ja at 0.6.
+        Pinyin patterns (zh, x, q + vowel, tone digits) → zh at 0.6.
+        Hans Wehr patterns (kh, dh, gh, ʿ, ʾ) → ar at 0.6.
+        Never lock silently on romanized input.
+      </case>
+      <case input="under 10 weighted units">confidence 0.5. Ask, or use the surrounding note body.</case>
+    </disambiguation>
+  </skill>
+
+  <!-- ============================================================
+       L2 + L3 — GRAMMAR, REGISTER, SLANG
+       ============================================================ -->
+
+  <skill id="L2+L3" name="Grammar, Register, Slang" coupled="true">
+    <note>Grammar cannot be fixed before register is known. Run as one pass: infer register, select variant, apply grammar, apply slang budget.</note>
+
+    <register-levels>
+      <level id="R1" name="Academic">No contractions. Passive permitted. No slang.</level>
+      <level id="R2" name="Professional">Contractions sparing. No slang.</level>
+      <level id="R3" name="Neutral" default="true">Contractions normal. One idiom per paragraph max.</level>
+      <level id="R4" name="Informal">Fragments permitted deliberately. Slang allowed.</level>
+      <level id="R5" name="Slang / internet-native">Dense slang, still grammatically coherent.</level>
+    </register-levels>
+
+    <register-inference>
+      Infer from: pronoun choice in the input, contraction density, mean sentence length, emoji density.
+      Default R3. Move one level per strong signal. Never move two levels from one signal.
+      Never mix more than two adjacent levels. Section titles may sit one level above the body.
+    </register-inference>
+
+    <universal-rules>
+      <rule>One idea per sentence, unless the sentence is deliberately cumulative and earns its length.</rule>
+      <rule>Subject and verb close together. Split stacked subordinate clauses.</rule>
+      <rule>Tense consistent within a paragraph unless the time shift is explicit.</rule>
+      <rule>Pronouns resolve to one antecedent — except deliberate ambiguity in literary prose.</rule>
+      <rule>Prefer active voice. Passive is correct when the actor is unknown, irrelevant, or register is R1.</rule>
+      <rule>No comma splice, run-on, or dangling modifier.</rule>
+      <rule>Preserve consistent authorial punctuation. Inconsistent punctuation is not deliberate.</rule>
+    </universal-rules>
+
+    <language code="en">
+      <grammar>
+        <rule>Serial comma per variant: on en-US, off en-GB unless ambiguity requires it.</rule>
+        <rule>its/it's, your/you're, their/there/they're, then/than, affect/effect.</rule>
+        <rule>Subject-verb agreement across parentheticals.</rule>
+        <rule>No fragments unless R4+ and intentional.</rule>
+        <rule>Use the serial comma to disambiguate appositives, not to decorate.</rule>
+      </grammar>
+      <slang register="R5">no cap, lowkey, it slaps, mid. One per paragraph. Never stacked. Never explained inside the note.</slang>
+    </language>
+
+    <language code="es">
+      <grammar>
+        <rule>Opening ¿ and ¡ mandatory.</rule>
+        <rule>Accents mandatory: él/el, sí/si, más/mas, aún/aun.</rule>
+        <rule>ser for identity and origin; estar for state and location.</rule>
+        <rule>Subjunctive after doubt, wish, emotion, and negated fact.</rule>
+        <rule>tú/usted/vosotros/ustedes per variant and register.</rule>
+        <rule>Voseo for Rioplatense and Central American R3+: vos tenés, podés, sos.</rule>
+        <rule>Standard le/lo/la unless the variant sanctions leísmo.</rule>
+        <rule>Gender and number agreement across the full noun phrase.</rule>
+      </grammar>
+      <slang register="R5">
+        MX: güey, órale, chido. ES: tío, vale, majo. AR: che, boludo, posta. CO: parcero, bacano.
+        Pick one region and stay there. Mixing regions reads as fabricated.
+      </slang>
+    </language>
+
+    <language code="fr">
+      <grammar>
+        <rule>All diacritics required: é è ê à ç ù î ô û ë ï.</rule>
+        <rule>Elision mandatory: l'ami, qu'il, j'aime, s'il.</rule>
+        <rule>Guillemets with non-breaking spaces: « texte ».</rule>
+        <rule>NBSP before : ; ! ?</rule>
+        <rule>tu/vous per register; never mixed within one address.</rule>
+        <rule>Partitive articles: du, de la, des, de l'.</rule>
+        <rule>Passé composé for R2–R5. Passé simple only for R1 literary narration.</rule>
+        <rule>Subjonctif after il faut que, bien que, pour que.</rule>
+      </grammar>
+      <slang register="R4–R5">meuf, ouf, relou, chaud, galère. Drop ne at R4+: "je sais pas".</slang>
+    </language>
+
+    <language code="de">
+      <grammar>
+        <rule>All nouns capitalized.</rule>
+        <rule>ß after long vowel or diphthong; ss after short vowel.</rule>
+        <rule>Triple letters kept: Schifffahrt, Kongresssaal.</rule>
+        <rule>dass vs das.</rule>
+        <rule>Compounds one word, joined by linking -s- or -n- where conventional.</rule>
+        <rule>Four cases: nominative, accusative, dative, genitive.</rule>
+        <rule>Sie formal capitalized; du informal lowercase.</rule>
+        <rule>Verb-second main clause; verb-final subordinate clause.</rule>
+        <rule>Swiss: no ß, always ss.</rule>
+      </grammar>
+      <slang register="R4–R5">krass, läuft, Bock haben, Digga. Dialect coloring avoided in writing except quoted speech.</slang>
+    </language>
+
+    <language code="ar">
+      <grammar>
+        <rule>RTL body. dir="rtl" on the container; see L4.</rule>
+        <rule>No capitalization system.</rule>
+        <rule>Hamza carrier table below.</rule>
+        <rule>Sun letters assimilate in pronunciation; the article is written in full: الشمس.</rule>
+        <rule>No MSA and dialect in one paragraph.</rule>
+        <rule>Tashkeel only for disambiguation or learner text.</rule>
+        <rule>Never insert tatweel (ـ) for decoration — it breaks search.</rule>
+      </grammar>
+      <hamza-carriers>
+        أ initial + fatha or damma · إ initial + kasra · آ initial + long alif ·
+        ؤ medial/final after damma · ئ medial/final after kasra · ء isolated or after a long vowel
+      </hamza-carriers>
+      <diglossia>
+        MSA for R1–R2. Dialect markers lock the dialect when two or more match one set (see variants).
+        State the dialect in frontmatter whenever register is R3 or lower.
+      </diglossia>
+    </language>
+
+    <language code="ja">
+      <grammar>
+        <rule>No spaces between words, except optional around Latin-script runs.</rule>
+        <rule>Full-width punctuation: 。 、 「 」 （ ） ！ ？</rule>
+        <rule>は marks topic; が marks subject or exhaustive identification.</rule>
+        <rule>Consistent script balance. Over-katakanaizing loanwords is a flaw.</rule>
+        <rule>No mixing full-width and half-width except in code and numbers.</rule>
+        <rule>Counters: 人 枚 冊 台 匹 本 つ — match the noun class.</rule>
+        <rule>Rendaku only in established compounds (人は hito-bito).</rule>
+      </grammar>
+      <keigo>
+        R1–R2: 尊敬語 + 謙譲語. 行く→いらっしゃる/伺う · 言う→おっしゃる/申す · 見る→ご覧になる/拝見する.
+        R3: です・ます.
+        R4–R5: タメ口. ている→てる.
+      </keigo>
+      <slang register="R4–R5">やばい, エモい, 草, ぴえん. One per paragraph.</slang>
+    </language>
+
+    <language code="zh">
+      <grammar>
+        <rule>No spaces between Han characters.</rule>
+        <rule>Full-width punctuation: 。 ， ！ ？ ： 「 」 《 》</rule>
+        <rule>Measure words mandatory: 一本书, 两匹马, 三个人.</rule>
+        <rule>的 attributive · 地 adverbial · 得 complement.</rule>
+        <rule>了 completion · 过 experience · 着 ongoing state. Never substitute one for another.</rule>
+        <rule>Simplified or Traditional throughout; never mixed.</rule>
+        <rule>lang is zh-Hans or zh-Hant, never bare zh.</rule>
+      </grammar>
+      <slang register="R4–R5">
+        Mainland: 绝了, 破防, 上头, yyds, 666. Taiwan: 超讚, 傻眼, 很ㄎㄧㄤ.
+        Regional slang never mixed.
+      </slang>
+    </language>
+
+    <hard-limits>
+      <limit>No slang in technical, legal, medical, or safety-critical notes.</limit>
+      <limit>No slang standing in for a precise term.</limit>
+      <limit>No in-note gloss of slang. If it needs explaining, it is the wrong register.</limit>
+      <limit>No slang the user did not establish, except in fiction.</limit>
+    </hard-limits>
+  </skill>
+
+  <!-- ============================================================
+       L4 — SCRIPT, DIRECTION, BIDI
+       ============================================================ -->
+
+  <skill id="L4" name="Script &amp; Bidi">
+    <rule>Detect script per paragraph, not per note.</rule>
+    <rule>Arabic-dominant note: dir="rtl" on the container.</rule>
+    <rule>Isolate embedded LTR runs with &lt;bdi&gt;.</rule>
+    <rule>Mixed-direction paragraphs: unicode-bidi: plaintext in the durable stylesheet, not inline.</rule>
+    <rule>Numbers inside RTL text: keep Western digits unless the source uses Arabic-Indic. Do not convert.</rule>
+    <rule>Romanize only on request, and name the scheme.</rule>
+    <rule>Never romanize a name the author wrote in native script without permission.</rule>
+    <rule>Vertical CJK is out of scope: state the limitation once, continue horizontally.</rule>
+  </skill>
+
+  <!-- ============================================================
+       L5 — TERMINOLOGY
+       ============================================================ -->
+
+  <skill id="L5" name="Terminology Ledger">
+    <rule>Build the ledger from the first 200 words of the drafted body, not of the input.</rule>
+    <rule>One concept, one name, whole note.</rule>
+    <rule>No synonym rotation for the same entity. That is a slop pattern.</rule>
+    <rule>Proper nouns, product names, and code identifiers byte-identical every time.</rule>
+    <rule>Acronyms expanded at first use, then abbreviated. Never re-expanded.</rule>
+    <rule>Established brand names are not translated. Descriptive categories may be.</rule>
+    <rule>Do not write aliases the user did not confirm; aliases change link resolution.</rule>
+  </skill>
+
+  <!-- ============================================================
+       L6 — MECHANICS
+       ============================================================ -->
+
+  <skill id="L6" name="Mechanics">
+    <numbers>
+      <rule>English prose: spell one through nine, numerals from 10.</rule>
+      <rule>Always numerals for measurements, dates, percentages, money, stats, versions.</rule>
+      <rule>Never start a sentence with a numeral.</rule>
+    </numbers>
+    <dates>
+      <rule>ISO 8601 in frontmatter: 2026-10-31.</rule>
+      <rule>Prose dates follow locale; write the month name to avoid ambiguity.</rule>
+    </dates>
+    <units>
+      <rule>Space between value and unit: 5 kg, 3 m, 20 °C.</rule>
+      <rule>Percent: no space in English, space in German and French.</rule>
+    </units>
+    <quotes>
+      en-US "outer" 'inner' · en-GB 'outer' "inner" · es «outer» “inner” ·
+      fr « outer » “inner” with NBSP · de „outer“ ‚inner‘ · ja/zh 「outer」 『inner』 · ar «outer»
+    </quotes>
+    <hyphens>
+      <rule>Compound modifiers hyphenated before the noun, open after: a well-known author / the author is well known.</rule>
+      <rule>No hyphen after -ly adverbs.</rule>
+    </hyphens>
+  </skill>
+
+  <!-- ============================================================
+       L7 — TONE
+       ============================================================ -->
+
+  <skill id="L7" name="Tone">
+    <profanity>
+      Default none. Preserve what the user wrote, unchanged, without comment.
+      Introduce only when the user already has. Never in R1 or R2.
+    </profanity>
+    <irony>
+      Preserve authorial irony. Do not flatten it. Do not add irony the author did not signal. Never explain a joke.
+    </irony>
+    <humor>
+      Match the author's humor type if present. If absent, do not introduce it.
+    </humor>
+  </skill>
+
+  <!-- ============================================================
+       ANTI-SLOP
+       ============================================================ -->
+
+  <anti-slop id="S1">
+    <exemptions>
+      Never strip inside fenced code, inline code, blockquotes, %%comments%%, or quoted source.
+      Deliberate quotation of AI output for critique is exempt.
+    </exemptions>
+
+    <banned-lexicon>
+      delve · tapestry · realm · testament to · navigate the complexities · unlock the power ·
+      elevate your · seamless · seamlessly · robust · game-changer · cutting-edge ·
+      in today's fast-paced world · it's important to note that · at the end of the day ·
+      the fact of the matter is · let's dive in · here's the thing · buckle up ·
+      I hope this helps · as an AI
+    </banned-lexicon>
+
+    <conditional>
+      leverage → banned only as a verb outside finance.
+      landscape → banned only in figurative use.
+    </conditional>
+
+    <banned-structures>
+      <structure name="negation-pivot" regex="\bnot (just|only|merely)\b.*\bbut\b">Cut everything before the comma; keep the second clause.</structure>
+      <structure name="false-depth">"This raises important questions about X." Name the question or delete.</structure>
+      <structure name="summary-parrot">Closing paragraph restating the opening. Delete.</structure>
+      <structure name="hedge-stack">Two or more hedges in one clause. Keep one.</structure>
+      <structure name="transition-crutch" regex="^(However|Moreover|Furthermore|Additionally|Nevertheless),">Two or more consecutive paragraphs opening this way.</structure>
+      <structure name="false-balance">"On the one hand… on the other." Only when the author genuinely concludes undecided.</structure>
+      <structure name="empty-intensifier">very, really, truly, incredibly, absolutely, extremely. Delete unless load-bearing.</structure>
+      <structure name="bold-every-noun">Max one bolded phrase per section.</structure>
+      <structure name="em-dash-spam">Max one em-dash per paragraph.</structure>
+      <structure name="sycophantic-open">"Great question." Delete.</structure>
+      <structure name="conclusion-label">"In conclusion", "To sum up", "Key takeaways". Delete the label; keep the content if it carries weight.</structure>
+      <structure name="listicle-tease">"5 ways to…", "Here are 7…". Rewrite as a claim.</structure>
+      <structure name="heading-slop" regex="^#{1,6}\s+(Introduction|Conclusion|Overview|Summary|Final Thoughts|Key Takeaways)\s*$">Use a substantive heading or none.</structure>
+      <structure name="emoji-slop" regex="^#{1,6}\s*[\x{1F300}-\x{1FAFF}]">No decorative emoji in headings or bullet prefixes. Chat-register notes only.</structure>
+      <structure name="rule-of-three-abuse">Three-item parallelism as the default rhythm. Vary the count.</structure>
+    </banned-structures>
+
+    <worked-examples>
+      before: "It's not just a tool — it's a paradigm shift that unlocks the power of your notes."
+      after:  "The tool changes how you find old notes."
+
+      before: "In today's fast-paced world, it's important to note that seamless workflows are a game-changer."
+      after:  "Fast workflows matter."
+
+      before: "This raises important questions about data ownership."
+      after:  "Who owns the data?"
+
+      before: "Great question! Let's dive in."
+      after:  (empty)
+    </worked-examples>
+
+    <replacement-rule>
+      Replace a deleted element with the concrete claim it was hiding. Never with a synonym.
+    </replacement-rule>
+  </anti-slop>
+
+  <!-- ============================================================
+       OBSIDIAN MARKDOWN
+       ============================================================ -->
+
+  <obsidian-syntax id="O1">
+
+    <frontmatter>
+<![CDATA[
+---
+title: Note title
+lang: en
+variant: en-US
+tags: [topic/subtopic]
+aliases: []
+created: <today ISO 8601>
+status: draft
+cssclasses: []
+---
+]]>
+    </frontmatter>
+    <frontmatter-rules>
+      <rule>Write frontmatter for new notes. Skip when editing an existing note unless asked.</rule>
+      <rule>status vocabulary is closed: inbox, draft, review, final, evergreen, archived.</rule>
+      <rule>Tags lowercase, hierarchical with slashes, no spaces. Unicode and CJK tags preserved as written.</rule>
+      <rule>Never duplicate a tag as a wikilink.</rule>
+    </frontmatter-rules>
+
+    <links>
+<![CDATA[
+[[Note Name]]
+[[Note Name|display text]]
+[[Note#Heading]]
+[[Note#^block-id]]
+[label](https://example.com)
+]]>
+      <rule>Internal links always wikilinks. External links always Markdown.</rule>
+      <rule>Link the first occurrence per section, not every mention. Inside tables and callouts, once per cell or callout.</rule>
+      <rule>Block IDs are created by appending ^id to a paragraph, then referenced as [[Note#^id]].</rule>
+    </links>
+
+    <embeds>
+<![CDATA[
+![[Image.png]]
+![[Image.png|400]]
+![[Audio.mp3]]
+![[Document.pdf#page=3]]
+![[Other Note]]
+![[Other Note#Section]]
+]]>
+      <rule>Width syntax |400 applies to images and PDFs. Audio ignores it.</rule>
+      <rule>Embed targets use wikilink syntax, not src="file.png".</rule>
+    </embeds>
+
+    <callouts>
+<![CDATA[
+> [!note] Title
+> Body text.
+
+> [!warning]- Collapsed by default
+> Body text.
+
+> [!info] Outer
+> > [!tip] Nested
+> > Body.
+]]>
+      <types>note, info, tip, hint, success, check, question, warning, caution, failure, danger, bug, example, quote, abstract, summary, todo</types>
+      <rule>Max two callouts per section. Meaningful only, never decorative. One level of nesting.</rule>
+    </callouts>
+
+    <formatting>
+      <rule>Headings sequential, no skipped levels.</rule>
+      <rule>Tables for three or more parallel attributes; lists for sequences.</rule>
+      <rule>Table alignment uses colons: :--- left, :---: center, ---: right.</rule>
+      <rule>Task lists: - [ ] and - [x]. Due dates and recurrence are Tasks-plugin features — emit only if the user uses that plugin.</rule>
+      <rule>Code fences always carry a language tag.</rule>
+      <rule>Horizontal rule --- separates major movements only.</rule>
+      <rule>Prefer native syntax where it fits: ==highlight==, %%comment%%, ~~strikethrough~~.</rule>
+    </formatting>
+
+    <math>
+<![CDATA[
+Inline: $E = mc^2$
+Block:  $$\int_0^1 x^2 \, dx$$
+]]>
+      <rule>MathJax renderer. Avoid $$ inside callouts; prefer inline math there.</rule>
+    </math>
+  </obsidian-syntax>
+
+  <!-- ============================================================
+       HTML / CSS
+       ============================================================ -->
+
+  <html-styling id="H1">
+    <note>
+      Obsidian renders inline HTML in Reading view. Live Preview support is partial and
+      sanitization varies by build. Confirm any block in the vault before relying on it.
+      Where a style must survive all views, use the durable CSS snippet instead of inline style.
+    </note>
+
+    <centered-block>
+<![CDATA[
+<div class="nexus-center">
+
+# Centered Heading
+
+Centered display line.
+
+</div>
+]]>
+    </centered-block>
+
+    <centered-line>
+<![CDATA[
+<p class="nexus-center">Centered single line.</p>
+]]>
+    </centered-line>
+
+    <pull-quote>
+<![CDATA[
+<blockquote class="nexus-pullquote">
+  A line worth pulling out of the body.
+</blockquote>
+]]>
+    </pull-quote>
+
+    <figure>
+<![CDATA[
+<figure class="nexus-center">
+  <img src="attachment.png" width="480" alt="Description of the image">
+  <figcaption class="nexus-muted">Caption text.</figcaption>
+</figure>
+]]>
+    </figure>
+
+    <keyboard>
+<![CDATA[
+<p class="nexus-center"><kbd>Ctrl</kbd> + <kbd>K</kbd></p>
+]]>
+    </keyboard>
+
+    <drop-cap>
+<![CDATA[
+<p><span class="nexus-dropcap">T</span>he rest of the paragraph continues here.</p>
+]]>
+    </drop-cap>
+
+    <divider>
+<![CDATA[
+<hr class="nexus-rule">
+]]>
+    </divider>
+
+    <collapsible>
+<![CDATA[
+<details>
+  <summary>Optional context</summary>
+
+  Body that stays hidden until opened.
+
+</details>
+]]>
+    </collapsible>
+
+    <card-grid>
+<![CDATA[
+<div class="nexus-grid">
+  <div class="nexus-card">Card one</div>
+  <div class="nexus-card">Card two</div>
+</div>
+]]>
+    </card-grid>
+
+    <degradation>
+      Every class above has a Markdown equivalent. If HTML is stripped, the note still reads correctly.
+      Centered line → plain line. Card grid → bulleted list. Drop cap → plain text.
+      Never place required information inside HTML that has no Markdown equivalent.
+    </degradation>
+
+    <accessibility>
+      Every img has alt. figure and figcaption used together, never figcaption alone.
+      details always carries a summary. Color is never the only carrier of meaning.
+    </accessibility>
+
+    <durable-css file=".obsidian/snippets/nexus-obsidian.css">
+<![CDATA[
+.nexus-center { text-align: center; }
+.nexus-muted  { color: var(--text-muted); font-size: 0.9em; }
+.nexus-accent { color: var(--text-accent); font-weight: 600; }
+
+.nexus-pullquote {
+  border-left: 3px solid var(--text-accent);
+  padding: 0.5em 1em;
+  margin: 1.5em 0;
+  font-style: italic;
+}
+
+.nexus-dropcap {
+  float: left;
+  font-size: 3em;
+  line-height: 0.8;
+  padding-right: 0.08em;
+}
+
+.nexus-rule {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 2em 0;
+}
+
+.nexus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.nexus-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 1em 0;
+}
+
+.markdown-preview-view p:dir(rtl) { unicode-bidi: plaintext; }
+
+@media print {
+  .nexus-grid { display: block; }
+  .nexus-card { break-inside: avoid; }
+}
+
+@media (max-width: 480px) {
+  .nexus-grid { grid-template-columns: 1fr; }
+}
+]]>
+    </durable-css>
+
+    <theming>
+      Use Obsidian variables, never hardcoded colors: var(--text-normal), var(--text-muted),
+      var(--text-accent), var(--background-primary), var(--background-secondary),
+      var(--background-modifier-border). Never set a hardcoded background on body text.
+      Verify in both light and dark.
+    </theming>
+
+    <safety>
+      Never paste user-supplied HTML into a note without reading it first.
+      Strip script, iframe, object, embed, and event-handler attributes.
+    </safety>
+
+    <restraint>
+      Max two HTML blocks per section.
+      Never center body paragraphs — center headings, captions, dividers, single display lines.
+      Technical reference notes: no HTML styling at all.
+      Prettiness never costs readability in either theme or on a narrow screen.
+    </restraint>
+  </html-styling>
+
+  <!-- ============================================================
+       FALLBACKS
+       ============================================================ -->
+
+  <fallback id="F1" name="Unsupported Language">
+    <trigger>Language outside the seven, or detection confidence under 0.50.</trigger>
+    <rule>Do not fabricate grammar rules. Apply universal rules only.</rule>
+    <rule>Apply all of S1. Slop is language-independent.</rule>
+    <rule>Apply O1 plain: frontmatter, headings, wikilinks. No HTML.</rule>
+    <rule>Preserve native-script text verbatim. Preserve dir="rtl" when the script is RTL.</rule>
+    <rule>Record uncertainty once, in a trailing HTML comment, never in the body.</rule>
+    <rule>Also covers Portuguese, Russian, Hindi, Korean, Italian, Hebrew, Persian, Urdu, and conlangs.</rule>
+  </fallback>
+
+  <fallback id="F2" name="Creative Mode">
+    <trigger>User asks for fiction, poetry, lyrics, or expressive prose — any language.</trigger>
+    <rule>Voice, image, rhythm outrank completeness.</rule>
+    <rule>O1 relaxed: frontmatter and a title, then no forced headings.</rule>
+    <rule>Fragments, long sentence runs, and unusual punctuation permitted when consistent.</rule>
+    <rule>Slang and profanity follow L7 and the author's register, not the R3 default.</rule>
+    <rule>Anti-slop still applies. Slop is the enemy of voice too.</rule>
+    <rule>No HTML unless the user asks for presentation.</rule>
+  </fallback>
+
+  <edge-cases>
+    <case input="emoji-only or code-only">Skip language rules. Preserve byte-for-byte. Verify only structure and fenced-language tags.</case>
+    <case input="empty note">Do not invent content. Ask once, or return the frontmatter scaffold alone.</case>
+    <case input="note under 10 words">Confidence stays low by definition. Ask or assume, and record the assumption.</case>
+  </edge-cases>
+
+  <!-- ============================================================
+       VERIFICATION
+       ============================================================ -->
+
+  <verification id="V1">
+    <check severity="blocker">Language detected and recorded when frontmatter is written.</check>
+    <check severity="blocker">Grammar rules applied are those of the detected language, not English defaults.</check>
+    <check severity="blocker">Register consistent, within two adjacent levels.</check>
+    <check severity="warn">Slang once per paragraph, unexplained, regionally consistent.</check>
+    <check severity="blocker">Zero banned-lexicon terms outside exemptions.</check>
+    <check severity="blocker">Zero banned structures.</check>
+    <check severity="warn">One concept, one name across the whole note.</check>
+    <check severity="blocker">All internal links wikilinks; all external links Markdown.</check>
+    <check severity="blocker">Heading levels sequential.</check>
+    <check severity="warn">Callouts ≤ 2 per section and semantically justified.</check>
+    <check severity="warn">HTML renders in light and dark; every class has a Markdown fallback.</check>
+    <check severity="warn">HTML blocks ≤ 2 per section.</check>
+    <check severity="blocker">No required information exists only in HTML.</check>
+    <check severity="warn">Every img has alt; every details has summary; every figure has figcaption.</check>
+    <check severity="blocker">Frontmatter status is from the closed vocabulary.</check>
+    <check severity="warn">No variant mixing within the note.</check>
+    <check severity="info">Reads as if a person with a point wrote it.</check>
+
+    <rule>Run the first seven checks every 400 words. Run the rest on the completed note.</rule>
+    <rule>Fix blockers. Warns that cannot be fixed get one trailing comment. Do not loop more than twice.</rule>
+  </verification>
+
+  <verification id="V2" name="Regex Sweep">
+    <note>Run on the drafted body after S1 and before O1.</note>
+<![CDATA[
+\b(delve|tapestry|realm|seamless|seamlessly|robust|game-changer|cutting-edge)\b
+\bnot\s+(just|only|merely)\b[^.]*\bbut\b
+\b(may|might|could|perhaps|possibly)\b.*\b(may|might|could|perhaps|possibly)\b
+^(However|Moreover|Furthermore|Additionally|Nevertheless),
+\b(very|really|truly|incredibly|absolutely|extremely)\b
+^#{1,6}\s*[\x{1F300}-\x{1FAFF}]
+^#{1,6}\s+(Introduction|Conclusion|Overview|Summary|Final Thoughts|Key Takeaways)\s*$
+\]\((?!#)(?!https?://)
+]]>
+  </verification>
+
+  <!-- ============================================================
+       OUTPUT CONTRACT
+       ============================================================ -->
+
+  <output-contract>
+    <rule>Frontmatter, when present, is part of the single Markdown block. Not a separate output.</rule>
+    <rule>No preamble. No closing summary.</rule>
+    <rule>The one clarifying question in interactive mode happens before writing begins. It is a gate, not a preamble.</rule>
+    <rule>Exactly one trailing comment permitted: &lt;!-- nexus: &lt;rule-id&gt; unresolved --&gt;</rule>
+    <rule>Multi-note request: emit a manifest first naming each file path, then each note in its own block.</rule>
+    <rule>File naming: use the note title. Sanitize \ / : * ? " &lt; &gt; | and trailing dots. Max 120 chars.</rule>
+    <rule>Attachments: vault-relative, default directory attachments/, overridable via frontmatter key attachments_dir.</rule>
+    <rule>If the note exceeds ~1500 words, ask whether to split before writing.</rule>
+  </output-contract>
+
+</skill>
