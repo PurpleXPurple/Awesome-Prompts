@@ -1,0 +1,555 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<skill id="nexus-plan" version="1.0.0" format="SKILL.xml" license="MIT" schema="agent-skill/1.0">
+
+  <!-- ============================================================
+       NEXUS-PLAN
+       Universal general-purpose planning skill.
+       Merges: superplanning, writing-plans (superpowers),
+       planning-with-files, iterative-planner, task-planning,
+       creating-development-plans, AwesomePlan, planner
+       (MuharremTozan), dev-plan, understand, HTN Planner.
+       Core invariant: NOTHING MAY BE SILENTLY SKIPPED.
+       Every problem, unknown, risk, or gap must be ACKNOWLEDGED
+       in the ACK Ledger with an explicit state before any gate
+       can pass. Omission is a hard validation failure.
+       ============================================================ -->
+
+  <metadata>
+    <name>Nexus-Plan</name>
+    <tagline>The planner that cannot forget.</tagline>
+    <scope>Any task, any domain, any agent, any language, any platform.</scope>
+    <install>Drop this file at .agents/skills/nexus-plan/SKILL.xml (or agent-equivalent skills directory). Load on intent matching: plan, design, architect, roadmap, refactor, migrate, debug, spec, implement, deliver.</install>
+    <portability>Claude Code, Codex, Gemini CLI, Cursor, Copilot CLI, OpenCode, Aider, Roo, Windsurf, custom agents. Uses only: filesystem, git, shell, markdown, YAML frontmatter.</portability>
+    <autonomy>Fully autonomous execution permitted only inside an approved Queue. Planning is always gated.</autonomy>
+  </metadata>
+
+  <!-- ============================================================ -->
+  <executive_summary>
+    Nexus-Plan is a single universal planning skill that fuses eleven best-in-class GitHub planning skills into one nine-phase state machine, and it does so under one non-negotiable law: every single concern, ambiguity, risk, edge case, failure mode, dependency, warning, version hazard, optimization constraint, platform quirk, data contract, algorithmic decision, and previously-discussed point must be entered as a numbered row in the ACK Ledger and must reach a terminal state (RESOLVED, DEFERRED-with-owner-and-expiry, RISK-ACCEPTED-with-signature, or OBSOLETE-with-reason) before the plan is allowed to advance past any gate or produce any execution task; a phase manifest is emitted at every gate enumerating every checklist item with a status, and any checklist item absent from the manifest invalidates the manifest, any OPEN ACK invalidates the gate, and any invalid gate halts the pipeline, which makes silent omission structurally impossible rather than merely discouraged. It borrows its seven-phase spine and anti-sycophancy forcing questions from superplanning, its two-to-five-minute independently-testable task granularity, exact file paths, exact test names, TDD red/green loop and commit-per-task discipline from writing-plans (superpowers), its crash-proof markdown working memory, per-turn plan re-injection, SHA-256 plan attestation and tamper refusal from planning-with-files, its Explore-Plan-Execute-Reflect-Pivot-Close state machine, filesystem-as-disk/context-as-RAM memory model and git-revert-per-step rollback from iterative-planner, its Bug and Fix Log, Mermaid-first design modelling, git-status reconciliation on resume, verification-evidence records and dependency-aware parallel dispatch waves from task-planning, its context-gathering sweep, multi-approach trade-off analysis, independently-testable phases and human review STOP gates from creating-development-plans, its guardrails, expert-defined scope, durable records and "plan broadly, execute narrowly within a finite agreed scope" rule from AwesomePlan, its mandatory five-axis Gap Audit (scope, I/O, dependencies, error/edge, acceptance) and approval-before-write gate from planner (MuharremTozan), its sprint-branch creation, machine-readable tracking tables, exception-handling section and metadata block from dev-plan, its forced alignment gate that must state goal, end-state, numbered steps, changed files, untouched files and material ambiguities with a three-section report and explicit human acceptance before work begins from understand, and its deterministic depth-first hierarchical task network decomposition with ground preconditions and add/delete effects and soundness verification from HTN Planner, and it delivers all of this as one portable XML artifact with tables, checklists, templates, hooks, validators and a coverage matrix so that any agent on any platform can execute it deterministically and any reviewer can audit it line by line.
+  </executive_summary>
+
+  <!-- ============================================================ -->
+  <axioms>
+    <axiom id="A1">No gate passes with an OPEN ACK.</axiom>
+    <axiom id="A2">No task exists without a parent ACK that is RESOLVED or signed-DEFERRED.</axiom>
+    <axiom id="A3">No phase completes without a phase manifest covering 100% of its checklist.</axiom>
+    <axiom id="A4">No claim of done without verification evidence written to disk.</axiom>
+    <axiom id="A5">The plan on disk is the source of truth; chat memory is RAM and is assumed volatile.</axiom>
+    <axiom id="A6">The plan is re-validated against the real repository (git status, git diff, files, test results) on every resume; the old plan is never trusted blindly.</axiom>
+    <axiom id="A7">Planning is broad; execution is narrow and only from the approved Queue.</axiom>
+    <axiom id="A8">Anti-sycophancy: the planner must actively argue against its own plan and must never smooth over a weak assumption to appear helpful.</axiom>
+    <axiom id="A9">Every artifact is human-readable, diffable, and machine-parseable.</axiom>
+    <axiom id="A10">Ambiguity is a bug, not a stylistic choice; unresolved ambiguity blocks the gate.</axiom>
+    <axiom id="A11">Every step is reversible; if it is not reversible, it requires an explicit RISK-ACCEPTED ACK with rollback instructions.</axiom>
+    <axiom id="A12">Omission is failure. Silence is never consent.</axiom>
+  </axioms>
+
+  <!-- ============================================================ -->
+  <routing>
+    <description>Intake classifies the request into exactly one primary mode and any number of secondary modes, then selects phase depth. Routing itself emits ACKs for any ambiguity in classification.</description>
+    <modes>
+      <mode id="M1" name="Brainstorm">Idea pressure-testing before any solution exists. Depth: Ground + Challenge + Define. Output: Requirements Document.</mode>
+      <mode id="M2" name="New-Product">Greenfield system. Depth: full nine phases. Output: Product Plan + Tech Stack + Roadmap + Implementation Plan.</mode>
+      <mode id="M3" name="New-Feature">Codebase-grounded addition. Depth: full nine phases. Output: Implementation Plan with exact file paths.</mode>
+      <mode id="M4" name="Refactor-Migration">Behaviour-preserving or behaviour-changing structural work. Depth: full, plus Parity ACKs and rollback plan. Output: Migration Plan + Parity Matrix.</mode>
+      <mode id="M5" name="Debug-Incident">Unknown-cause defect or production incident. Depth: Ground + Hypothesise + Reflect + Pivot + Close. Output: RCA + Fix Plan + Regression Prevention.</mode>
+      <mode id="M6" name="Research-Unknown">Feasibility or spike. Depth: Ground + Challenge + Deepen. Output: Findings + Decision Record.</mode>
+      <mode id="M7" name="Multi-Agent-Sprint">Work to be split across agents or humans. Depth: full, plus dependency waves, write-scope partitioning, handoff records. Output: Sprint Plan + Wave Schedule.</mode>
+      <mode id="M8" name="Non-Code">Ops runbooks, documentation, design, process, data pipelines, infrastructure. Depth: full, with code-specific phases swapped for domain equivalents. Output: domain-adapted plan.</mode>
+    </modes>
+    <routing_questions>
+      <question>What is the observable end state that proves this task is finished?</question>
+      <question>What must NOT change?</question>
+      <question>What is the blast radius if this goes wrong?</question>
+      <question>What is irreversible?</question>
+      <question>Who must approve, and at which gates?</question>
+      <question>What is already known to be broken or previously discussed?</question>
+    </routing_questions>
+    <rule>Every unanswered routing question becomes a BLOCKING ACK at the Alignment Gate.</rule>
+  </routing>
+
+  <!-- ============================================================ -->
+  <state_machine>
+    <description>Formal nine-phase machine. Each phase has: entry condition, checklist, forcing questions, output artifact, gate, exit condition. Transition is illegal if the phase manifest is incomplete or any ACK owned by the phase is OPEN.</description>
+    <phases>
+      <phase id="P0" name="Intake-Route" entry="task received">
+        <checklist>
+          <item>Classify into primary mode and secondary modes.</item>
+          <item>Record raw request verbatim to intake.md.</item>
+          <item>Emit ACK for every ambiguous noun, verb, scope word, or success word.</item>
+          <item>Select phase depth and declare which phases will run.</item>
+        </checklist>
+        <output>intake.md with mode, verbatim request, ambiguity ACKs.</output>
+        <gate>G0-Intake</gate>
+      </phase>
+
+      <phase id="P1" name="Ground" entry="G0 passed">
+        <checklist>
+          <item>Read the real codebase/repository/domain, not a memory of it.</item>
+          <item>Inventory: languages, runtimes, frameworks, package managers, build systems, CI, deploy targets, test frameworks, lint/format rules, conventions.</item>
+          <item>Read existing docs, ADRs, README, CONTRIBUTING, issue templates, tests.</item>
+          <item>Record git state: branch, HEAD, dirty files, recent history, tags.</item>
+          <item>Locate the exact files and symbols that will be touched; record paths and line ranges.</item>
+          <item>Record existing constraints: style, architecture boundaries, forbidden dependencies, licence, performance budgets, accessibility, security posture.</item>
+          <item>Identify previously discussed points: prior plans, review comments, bug logs, TODOs, open issues, abandoned attempts.</item>
+          <item>Emit ACK for every unknown discovered.</item>
+        </checklist>
+        <forcing_questions>
+          <question>What did I not read that could invalidate everything below?</question>
+          <question>What does the repo already do that makes my instinct redundant?</question>
+          <question>What has already been tried and abandoned here, and why?</question>
+        </forcing_questions>
+        <output>findings.md (append-only, timestamped) + codebase-map.md.</output>
+        <gate>G1-Ground</gate>
+      </phase>
+
+      <phase id="P2" name="Challenge-Explore" entry="G1 passed">
+        <checklist>
+          <item>State the premise of the request and attack it: is the right thing being built?</item>
+          <item>Generate at least three materially different approaches.</item>
+          <item>For each approach: mechanism, cost, risk, reversibility, blast radius, exit cost.</item>
+          <item>Apply anti-sycophancy: write the strongest argument against the currently favoured approach.</item>
+          <item>Enumerate failure modes, warning states, degraded modes, race conditions, null/empty/oversized inputs, concurrency, partial failure, retry storms, clock/timezone, unicode, locale, precision, overflow, off-by-one, and resource exhaustion.</item>
+          <item>Enumerate edge cases per input and per state transition.</item>
+          <item>Mindful situation prediction: model the state of the system, the user, the data, and the platform at t+1 day, t+1 month, t+1 year.</item>
+          <item>Convert every concern into a numbered ACK.</item>
+        </checklist>
+        <output>alternatives.md with trade-off table + risk-register.md.</output>
+        <gate>G2-Challenge</gate>
+      </phase>
+
+      <phase id="P3" name="Define" entry="G2 passed">
+        <checklist>
+          <item>Assign stable requirement IDs (R1..Rn), each testable and unambiguous.</item>
+          <item>Assign non-goals (N1..Nn) explicitly — what is out of scope and why.</item>
+          <item>Write scope boundaries: in, out, may-change-later.</item>
+          <item>Write acceptance criteria per requirement, in observable terms.</item>
+          <item>Write data contracts: shapes, types, nullability, optionality, defaults, units, ranges, precision, encoding, validation rules, error values.</item>
+          <item>Write interface contracts: signatures, request/response schemas, status codes, side effects, idempotency.</item>
+          <item>Write platform matrix: OS, runtime versions, browsers/devices, architectures, deployment targets, feature flags.</item>
+          <item>Write version strategy: dependency pinning, migration path, deprecation timeline, backward compatibility guarantees, schema versioning.</item>
+          <item>Write performance and optimization budgets: latency, throughput, memory, bundle size, query counts, complexity classes.</item>
+          <item>Write security and privacy constraints: authN, authZ, secrets, PII, retention, threat surface.</item>
+          <item>Re-open every ACK from P1–P3 and confirm or escalate.</item>
+        </checklist>
+        <output>requirements.md (stable IDs, non-goals, contracts, budgets).</output>
+        <gate>G3-Define</gate>
+      </phase>
+
+      <phase id="P4" name="Structure" entry="G3 passed">
+        <checklist>
+          <item>Decompose hierarchically (HTN): goal → compound tasks → primitive tasks, depth-first, deterministic.</item>
+          <item>For every compound task, record decomposition rule and preconditions.</item>
+          <item>For every primitive task, record ground preconditions, add-effects, delete-effects, and executability in the current state.</item>
+          <item>Break into 2–5 minute units; each unit is the smallest thing that carries its own test cycle.</item>
+          <item>Each unit gets: exact file path(s), exact symbol(s), exact test name, exact command to run.</item>
+          <item>Order by dependency; compute waves for parallel-safe dispatch; guarantee no two tasks in a wave share a write scope.</item>
+          <item>Mark reversibility per unit and give a rollback instruction for every irreversible unit.</item>
+          <item>Attach error handling per unit: expected exceptions, warning conditions, degraded path, user-visible message, log level.</item>
+          <item>Attach optimization note per unit only where a budget from P3 applies; forbid speculative optimization.</item>
+          <item>Verify the task graph is acyclic and that every leaf traces to a requirement ID.</item>
+        </checklist>
+        <output>plan.md (task DAG, wave table, per-task contract block).</output>
+        <gate>G4-Structure</gate>
+      </phase>
+
+      <phase id="P5" name="Validate" entry="G4 passed">
+        <checklist>
+          <item>Run the multi-persona review panel (see personas).</item>
+          <item>Every persona produces a numbered finding; every finding becomes an ACK.</item>
+          <item>Re-check the coverage matrix: every required dimension has a non-empty mechanism and artifact.</item>
+          <item>Re-check that every ACK from all prior phases is terminal or explicitly scheduled.</item>
+          <item>Traceability sweep: requirement → task → test → acceptance criterion. Any orphan on either side is a blocking ACK.</item>
+          <item>Contradiction sweep: two requirements, two tasks, or a task and a non-goal that conflict.</item>
+          <item>Assumption sweep: list every assumption; for each, write what breaks if it is false.</item>
+        </checklist>
+        <personas>
+          <persona name="Adversary">Tries to break the plan. Must produce at least five findings or justify why five are impossible.</persona>
+          <persona name="Sceptic">Assumes every optimistic estimate and every unstated assumption is wrong.</persona>
+          <persona name="Newcomer">Has never seen the codebase; can they execute each task from the written plan alone?</persona>
+          <persona name="Maintainer">Will own this in two years; will they curse the author?</persona>
+          <persona name="Security">What is exploitable, leakable, or unauthenticated?</persona>
+          <persona name="Operator">What pages at 3am, and does the plan tell them what to do?</persona>
+          <persona name="Accessibility-Domain">Who is excluded by this design?</persona>
+          <persona name="Cost">What does this cost to run, at 1x and 100x?</persona>
+        </personas>
+        <output>review.md with persona findings + reconciliation log.</output>
+        <gate>G5-Validate</gate>
+      </phase>
+
+      <phase id="P6" name="Deepen" entry="G5 passed and at least one ACK requires research">
+        <checklist>
+          <item>Identify every ACK whose resolution requires external or experimental knowledge.</item>
+          <item>Run targeted research or a spike per ACK; timebox each.</item>
+          <item>Record source, date, and confidence per finding.</item>
+          <item>Convert findings into plan amendments with a diff against the prior plan version.</item>
+          <item>Re-run P5 on any amended section.</item>
+        </checklist>
+        <output>research.md + plan diff + updated ACKs.</output>
+        <gate>G6-Deepen</gate>
+      </phase>
+
+      <phase id="P7" name="Approval-Gate" entry="G6 passed or skipped by declaration">
+        <checklist>
+          <item>Emit the three-section Alignment Report: Task Goal, Process Detail, Task Expansion.</item>
+          <item>Task Goal states the observable end state and the definition of done.</item>
+          <item>Process Detail numbers every step and names every file that will change and every file that will not be touched.</item>
+          <item>Task Expansion lists what is deliberately excluded and what may be added later.</item>
+          <item>Present the Queue: the finite, agreed set of tasks authorised for execution.</item>
+          <item>Present the ACK Ledger summary: counts by state; list every DEFERRED and RISK-ACCEPTED with owner, reason, expiry.</item>
+          <item>Obtain explicit human or policy acceptance. Silence is not acceptance.</item>
+        </checklist>
+        <output>alignment-report.md + queue.md + ACK ledger snapshot.</output>
+        <gate>G7-Approval (human gate, never auto-passed)</gate>
+      </phase>
+
+      <phase id="P8" name="Execute-Record" entry="G7 passed">
+        <checklist>
+          <item>Create sprint branch; record base branch in plan metadata.</item>
+          <item>Execute only from the Queue, one unit at a time, in wave order.</item>
+          <item>Per unit: write failing test → run → confirm failure → implement → run → confirm pass → run full suite → commit with unit ID in message.</item>
+          <item>Per unit: append verification evidence (command, output digest, timestamp) to evidence.md.</item>
+          <item>On any unexpected result: transition to Reflect, then Pivot or Close; do not push through.</item>
+          <item>On any bug: append to bug-log.md with symptom, reproduction, root cause, affected files, regression test, prevention note.</item>
+          <item>Reflect state: what changed, what was learned, what the plan got wrong; amend plan and bump version.</item>
+          <item>Pivot state: record the abandoned path and the reason so it is never retried blindly.</item>
+          <item>Reconcile on every resume: compare plan against git status, git diff, real files, real test output; trust reality, not the plan.</item>
+          <item>Update tracking tables after every unit.</item>
+        </checklist>
+        <output>code + tests + commits + evidence.md + bug-log.md + progress.md.</output>
+        <gate>G8-Execute (Stop gate holds while any in_progress unit remains; stall detection fires after N units with no state change)</gate>
+      </phase>
+
+      <phase id="P9" name="Close" entry="all Queue units terminal">
+        <checklist>
+          <item>Verify every requirement ID has passing evidence.</item>
+          <item>Verify every ACK is terminal; list any surviving DEFERRED with expiry.</item>
+          <item>Run full suite, lint, type check, build, and platform matrix smoke test.</item>
+          <item>Write handoff record: what exists, what does not, what to do next, known sharp edges.</item>
+          <item>Write retro: what the plan missed and why, feeding the Missed-Points register.</item>
+          <item>Attest the final plan with SHA-256.</item>
+          <item>Close sprint branch per policy; do not merge without evidence.</item>
+        </checklist>
+        <output>handoff.md + retro.md + attestation.txt.</output>
+        <gate>G9-Close</gate>
+      </phase>
+    </phases>
+  </state_machine>
+
+  <!-- ============================================================ -->
+  <acknowledgment_protocol>
+    <description>The mechanism that makes omission structurally impossible. This is the heart of Nexus-Plan.</description>
+
+    <ledger>
+      <file>acks.md</file>
+      <id_format>ACK-0001</id_format>
+      <required_fields>id, title, raised_by_phase, raised_by_persona, dimension, severity, description, impact_if_unresolved, owner, state, resolution, evidence, created, updated, expires</required_fields>
+      <states>
+        <state code="OPEN">Raised, unresolved. Blocks every gate that owns it.</state>
+        <state code="RESOLVED">Answered with recorded evidence. Terminal.</state>
+        <state code="DEFERRED">Postponed with named owner, written reason, explicit expiry date, and re-entry trigger. Non-terminal but gate-passable.</state>
+        <state code="RISK-ACCEPTED">Knowingly accepted with signature, rationale, blast radius, and rollback instruction. Gate-passable, permanently visible.</state>
+        <state code="BLOCKED">Cannot proceed until an external event. Halts the pipeline.</state>
+        <state code="OBSOLETE">No longer relevant; requires written reason. Terminal.</state>
+      </states>
+      <severity>
+        <level code="S1">Blocks correctness, safety, security, data integrity, or money. Must be RESOLVED.</level>
+        <level code="S2">Blocks quality, performance budget, or platform support. RESOLVED or RISK-ACCEPTED.</level>
+        <level code="S3">Affects maintainability, ergonomics, or clarity. Any terminal state allowed.</level>
+        <level code="S4">Nitpick, style, preference. Any terminal state allowed.</level>
+      </severity>
+    </ledger>
+
+    <phase_manifest>
+      <description>Every phase must emit a manifest before its gate. The manifest enumerates every checklist item of that phase with a status. The validator recomputes the expected checklist from this file and diffs it against the manifest. Missing item = manifest INVALID = gate fails.</description>
+      <file>manifests/P&lt;n&gt;-manifest.yaml</file>
+      <required_fields>phase, checklist_total, checklist_covered, items[id,text,status,evidence,ack_ref], open_acks, verdict</required_fields>
+      <statuses>DONE, N/A-with-reason, DEFERRED-to-ACK, FAILED</statuses>
+      <rule>N/A requires a reason string; an N/A without reason is treated as DONE-by-omission and is rejected.</rule>
+    </phase_manifest>
+
+    <silence_rule>
+      <statement>Any concern that a reasonable reviewer would raise, and that appears in no ACK and in no manifest item, is a defect of the plan itself and must be retroactively added and closed before Close.</statement>
+      <enforcement>At G5 the Sceptic and Newcomer personas are required to attempt to find a concern that the ledger missed. At G9 the retro must name at least one such concern or justify its absence.</enforcement>
+    </silence_rule>
+
+    <unknown_unknown_mitigation>
+      <technique>Falsification sweep: for each assumption, write the observation that would prove it false, then check whether that observation is available.</technique>
+      <technique>Pre-mortem: assume the project failed; write the five most plausible causes; each becomes an ACK.</technique>
+      <technique>Inversion: describe how to guarantee failure; each mechanism becomes an ACK.</technique>
+      <technique>Boundary probing: for every input, test 0, 1, many, max, negative, null, malformed, unicode, concurrent.</technique>
+      <technique>Time travel: state of system at 1 day, 1 month, 1 year, and after the author leaves.</technique>
+      <technique>Adversary walkthrough: narrate an attacker, a careless user, a flaky network, a partial deploy, a rollback.</technique>
+    </unknown_unknown_mitigation>
+  </acknowledgment_protocol>
+
+  <!-- ============================================================ -->
+  <persistence_layer>
+    <model>Context window is RAM. Filesystem is disk. RAM is assumed to be wiped without warning.</model>
+    <files>
+      <file name="intake.md">verbatim request, mode, depth, ambiguity ACKs</file>
+      <file name="findings.md">append-only, timestamped ground truth from P1</file>
+      <file name="codebase-map.md">files, symbols, line ranges, conventions, constraints</file>
+      <file name="alternatives.md">approaches, trade-offs, strongest counter-argument</file>
+      <file name="risk-register.md">failure modes, edge cases, degraded states</file>
+      <file name="requirements.md">R-IDs, N-IDs, contracts, budgets, platform matrix</file>
+      <file name="plan.md">task DAG, waves, per-task contract blocks, version, base branch</file>
+      <file name="queue.md">the finite approved execution set</file>
+      <file name="acks.md">the ledger</file>
+      <file name="review.md">persona findings and reconciliation</file>
+      <file name="research.md">deepen findings with source, date, confidence</file>
+      <file name="alignment-report.md">three-section report</file>
+      <file name="task_plan.md">current phase, current unit, next unit, blockers</file>
+      <file name="progress.md">per-unit progress and tracking tables</file>
+      <file name="evidence.md">command, output digest, timestamp, per unit</file>
+      <file name="bug-log.md">symptom, reproduction, root cause, affected files, regression test, prevention</file>
+      <file name="decisions.md">ADR-style decisions with rejected options</file>
+      <file name="handoff.md">state, next steps, sharp edges</file>
+      <file name="retro.md">what was missed and why</file>
+      <file name="attestation.txt">SHA-256 of plan.md at approval and at close</file>
+    </files>
+
+    <re_injection>
+      <rule>At session start, on every user prompt, and before compaction, inject the head of plan.md (goal, current phase, current unit, next unit, open blockers) back into context.</rule>
+      <rule>Injection must be KV-cache stable: header text is byte-identical across turns; only the volatile fields change.</rule>
+      <rule>Autonomous mode may drop per-tool-call recitation to save tokens but must re-inject on phase transition and on resume.</rule>
+    </re_injection>
+
+    <attestation>
+      <rule>On G7 approval, hash plan.md and queue.md; store in attestation.txt.</rule>
+      <rule>On every resume, recompute the hash. On mismatch, refuse to inject the plan and emit [PLAN TAMPERED] with a diff, until a human re-approves.</rule>
+      <rule>Every plan amendment during Execute bumps version and produces a diff, which re-enters Validate.</rule>
+    </attestation>
+
+    <reconciliation_on_resume>
+      <step>Read plan.md and task_plan.md.</step>
+      <step>Run git status and git diff against the recorded base branch.</step>
+      <step>Read the actual files named in the current unit.</step>
+      <step>Run the test command named in the current unit and record the real result.</step>
+      <step>Mark every unit whose claimed state disagrees with reality as INVALIDATED and re-open its ACKs.</step>
+      <step>Never trust the plan over the repository.</step>
+    </reconciliation_on_resume>
+
+    <stall_detection>
+      <rule>If N consecutive units produce no change in progress.md state, the Stop gate fires and forces a Reflect→Pivot or Close decision.</rule>
+      <default_n>3</default_n>
+    </stall_detection>
+  </persistence_layer>
+
+  <!-- ============================================================ -->
+  <execution_model>
+    <unit_definition>The smallest unit of work that carries its own test cycle and is worth a fresh reviewer's attention. Target 2–5 minutes of agent time.</unit_definition>
+    <unit_contract>
+      <field>id</field>
+      <field>wave</field>
+      <field>depends_on</field>
+      <field>write_scope (files/dirs exclusively owned in this wave)</field>
+      <field>requirement_ids</field>
+      <field>files (exact paths)</field>
+      <field>symbols (exact names and signatures)</field>
+      <field>test_name (exact)</field>
+      <field>test_command (exact, runnable)</field>
+      <field>preconditions (ground, checkable)</field>
+      <field>add_effects</field>
+      <field>delete_effects</field>
+      <field>error_handling (exception, warning, degraded path, message, log level)</field>
+      <field>optimization_budget_ref (or none — no speculative optimization)</field>
+      <field>platform_notes</field>
+      <field>data_contract_ref</field>
+      <field>reversible (bool) + rollback instruction</field>
+      <field>acceptance_criterion</field>
+      <field>evidence_required</field>
+      <field>commit_message_template</field>
+    </unit_contract>
+
+    <tdd_loop>write failing test → run → confirm failure for the right reason → implement minimum → run → confirm pass → run full suite → run lint and type check → commit.</tdd_loop>
+
+    <waves>
+      <rule>Two units may share a wave only if their write scopes are disjoint.</rule>
+      <rule>A unit enters a wave only when all depends_on units are terminal.</rule>
+      <rule>Parallel dispatch never exceeds the declared concurrency limit.</rule>
+      <rule>Handoff between waves requires evidence.md entries for the previous wave.</rule>
+    </waves>
+
+    <commit_discipline>
+      <rule>One commit per unit, minimum.</rule>
+      <rule>Commit message contains unit ID and requirement IDs.</rule>
+      <rule>No commit without a passing test for the behaviour it introduces.</rule>
+      <rule>Every commit is a valid rollback point.</rule>
+    </commit_discipline>
+
+    <guardrails>
+      <rule>Never edit files outside the approved write scope of the current unit.</rule>
+      <rule>Never touch files listed in the Alignment Report as untouched.</rule>
+      <rule>Never add a dependency not approved at G3.</rule>
+      <rule>Never disable, skip, or weaken a test to make the suite pass.</rule>
+      <rule>Never suppress a warning without an ACK.</rule>
+      <rule>Never commit secrets; scan before commit.</rule>
+      <rule>Never push, merge, deploy, or delete without explicit policy authorisation.</rule>
+    </guardrails>
+  </execution_model>
+
+  <!-- ============================================================ -->
+  <coverage_matrix>
+    <description>Every required dimension, its mechanism, its artifact, and the gate that enforces it. No row may be empty. A row with no mechanism fails G5.</description>
+    <table id="dimensions">
+      <header><cell>Dimension</cell><cell>Mechanism in Nexus-Plan</cell><cell>Artifact</cell><cell>Gate</cell></header>
+      <row><cell>Creative writing</cell><cell>Brainstorm mode prose; alternatives.md written as narrative argument, not bullet fragments; ADR prose in decisions.md; handoff written for a human stranger</cell><cell>alternatives.md, decisions.md, handoff.md</cell><cell>G2, G5, G9</cell></row>
+      <row><cell>Creative thinking</cell><cell>Forced three-alternatives minimum; inversion; pre-mortem; boundary probing; time travel; adversary walkthrough</cell><cell>alternatives.md, risk-register.md, acks.md</cell><cell>G2, G5</cell></row>
+      <row><cell>Programming thinking</cell><cell>Exact files and symbols per unit; contracts before code; complexity and data-shape reasoning in P3</cell><cell>requirements.md, plan.md</cell><cell>G3, G4</cell></row>
+      <row><cell>Programming planning</cell><cell>HTN decomposition to primitive units with preconditions and effects; dependency DAG; wave scheduling</cell><cell>plan.md, queue.md</cell><cell>G4</cell></row>
+      <row><cell>Mindful situation prediction</cell><cell>Pre-mortem, t+1 day/month/year modelling, degraded-mode enumeration, operator persona, cost persona</cell><cell>risk-register.md, review.md</cell><cell>G2, G5</cell></row>
+      <row><cell>Error handling</cell><cell>Per-unit error contract; failure-mode enumeration; Bug and Fix Log with root cause and regression test; Reflect/Pivot states</cell><cell>plan.md, bug-log.md</cell><cell>G4, G8</cell></row>
+      <row><cell>Warning handling</cell><cell>Warning states enumerated in P2; suppression forbidden without an ACK; lint and type-check in the per-unit loop</cell><cell>risk-register.md, evidence.md</cell><cell>G2, G8</cell></row>
+      <row><cell>Version handling</cell><cell>Dependency pinning and migration path in P3; plan versioning with diffs; SHA-256 attestation; sprint branch with recorded base; commit-per-unit rollback; schema versioning</cell><cell>requirements.md, attestation.txt, plan.md</cell><cell>G3, G7, G8</cell></row>
+      <row><cell>Heavy optimization handling</cell><cell>Explicit budgets at P3; optimization only where a budget applies; no speculative optimization; complexity classes and query counts recorded; cost persona at 1x and 100x</cell><cell>requirements.md, review.md</cell><cell>G3, G5</cell></row>
+      <row><cell>Platform handling</cell><cell>Platform matrix at P3; per-unit platform notes; platform smoke test at Close; portable skill format with no external services</cell><cell>requirements.md, plan.md, handoff.md</cell><cell>G3, G9</cell></row>
+      <row><cell>Best data handling</cell><cell>Data contracts: types, nullability, defaults, units, ranges, precision, encoding, validation, error values; append-only findings; structured markdown working memory; machine-parseable tables</cell><cell>requirements.md, findings.md, progress.md</cell><cell>G3, G5</cell></row>
+      <row><cell>Algorithmic approaches</cell><cell>Three-plus approaches with formal trade-off table; complexity and cost per approach; strongest counter-argument recorded</cell><cell>alternatives.md</cell><cell>G2</cell></row>
+      <row><cell>Algorithmic planning</cell><cell>HTN DFS decomposition with soundness check; acyclic task graph verification; dependency-wave scheduling with write-scope partitioning; deterministic phase machine</cell><cell>plan.md, manifests</cell><cell>G4, G5</cell></row>
+      <row><cell>Missed points already discussed</cell><cell>P1 sweep of prior plans, review comments, TODOs, open issues, abandoned attempts; Missed-Points register; retro must name at least one new miss</cell><cell>findings.md, retro.md, acks.md</cell><cell>G1, G9</cell></row>
+      <row><cell>Clear outputs</cell><cell>Every phase declares a named artifact; every artifact has a template; every gate emits a manifest; final handoff written for a stranger</cell><cell>all</cell><cell>all</cell></row>
+      <row><cell>Genuine depth and full information</cell><cell>Nine phases, eight personas, five-axis gap audit, Deepen phase with sources and confidence, falsification sweep, silence rule</cell><cell>review.md, research.md, acks.md</cell><cell>G5, G6</cell></row>
+    </table>
+  </coverage_matrix>
+
+  <!-- ============================================================ -->
+  <gap_audit>
+    <description>Mandatory five-axis audit executed before any task is written. Every axis must yield at least one ACK or an explicit "no findings" entry with justification.</description>
+    <axis id="GA1" name="Scope">What is in, what is out, what is ambiguous, what is assumed, who decides.</axis>
+    <axis id="GA2" name="Inputs-Outputs">Exact shapes, types, units, ranges, defaults, error values, side effects, idempotency, ordering.</axis>
+    <axis id="GA3" name="Dependencies">Internal, external, versioned, network, human, vendor, licence, environment, ordering, failure of each.</axis>
+    <axis id="GA4" name="Errors-Edges">Null, empty, one, many, max, negative, malformed, unicode, concurrent, partial, timeout, retry, rollback, degraded, offline, clock skew, locale.</axis>
+    <axis id="GA5" name="Acceptance">Observable proof of done per requirement, who verifies, with what command, with what evidence.</axis>
+    <rule>An axis with no findings requires the sentence: "No findings on this axis because &lt;specific reason&gt;." A generic reason is rejected.</rule>
+  </gap_audit>
+
+  <!-- ============================================================ -->
+  <source_lineage>
+    <description>Which skill contributed which capability. Preserved for auditability and for upstream sync.</description>
+    <table id="lineage">
+      <header><cell>Source skill</cell><cell>Contributed capability</cell><cell>Lives in Nexus-Plan at</cell></header>
+      <row><cell>superplanning</cell><cell>Seven-phase spine, three modes, anti-sycophancy forcing questions, stable requirement IDs, mode-adaptive depth, Deepen phase</cell><cell>state_machine P0-P9, axioms A8, requirements.md</cell></row>
+      <row><cell>writing-plans (superpowers)</cell><cell>2–5 minute units, exact file paths and test names, TDD red/green, commit-per-task, DRY/YAGNI, stranger-readable plan</cell><cell>execution_model, unit_contract, commit_discipline</cell></row>
+      <row><cell>planning-with-files</cell><cell>Crash-proof markdown memory, per-turn re-injection, KV-cache-stable injection, SHA-256 attestation, tamper refusal, 60+ agent portability, stall detection</cell><cell>persistence_layer, attestation, re_injection, stall_detection</cell></row>
+      <row><cell>iterative-planner</cell><cell>Explore-Plan-Execute-Reflect-Pivot-Close, context-as-RAM/filesystem-as-disk, git-revert-per-step, disk-first memory, validator</cell><cell>state_machine, persistence_layer, guardrails</cell></row>
+      <row><cell>task-planning</cell><cell>Bug and Fix Log, Mermaid-first design, git reconciliation on resume, verification evidence, dependency-aware parallel waves, per-task YAML frontmatter</cell><cell>bug-log.md, reconciliation_on_resume, evidence.md, waves</cell></row>
+      <row><cell>creating-development-plans</cell><cell>Context gathering sweep, multi-approach trade-off analysis, independently testable phases, QA checklist, human review STOP gates</cell><cell>P1, P2, G7, review.md</cell></row>
+      <row><cell>AwesomePlan</cell><cell>Guardrails, expert-defined scope, durable records over chat history, plan-broadly-execute-narrowly, GitHub/local sync, queue approval</cell><cell>guardrails, queue.md, axioms A7</cell></row>
+      <row><cell>planner (MuharremTozan)</cell><cell>Five-axis mandatory gap audit, error and edge questioning before writing, approval-before-write, dependency-aware sequencing</cell><cell>gap_audit, G7</cell></row>
+      <row><cell>dev-plan</cell><cell>Sprint branch creation with recorded base, machine-readable tracking tables, exception-handling section, plan metadata block</cell><cell>P8, progress.md, plan.md header</cell></row>
+      <row><cell>understand</cell><cell>Forced alignment gate, three-section report, numbered steps, changed and untouched files, material ambiguity disclosure, explicit acceptance</cell><cell>P7, alignment-report.md</cell></row>
+      <row><cell>HTN Planner</cell><cell>Deterministic DFS decomposition, ground preconditions, add/delete effects, soundness verification, compound-to-primitive reduction</cell><cell>P4, unit_contract</cell></row>
+    </table>
+  </source_lineage>
+
+  <!-- ============================================================ -->
+  <artifacts>
+    <artifact name="Alignment Report" owner="P7">
+      <section order="1" name="Task Goal">Observable end state, definition of done, who verifies.</section>
+      <section order="2" name="Process Detail">Numbered steps; every file that will change; every file that will not be touched.</section>
+      <section order="3" name="Task Expansion">What is excluded, what may be added later, what would trigger re-planning.</section>
+      <section order="4" name="Ledger Summary">Counts by state; every DEFERRED and RISK-ACCEPTED with owner, reason, expiry.</section>
+      <section order="5" name="Queue">The finite authorised execution set.</section>
+    </artifact>
+
+    <artifact name="Plan Header (plan.md frontmatter)">
+      <field>plan_version</field>
+      <field>skill_version</field>
+      <field>mode</field>
+      <field>base_branch</field>
+      <field>sprint_branch</field>
+      <field>created</field>
+      <field>last_amended</field>
+      <field>approval_hash</field>
+      <field>current_phase</field>
+      <field>current_unit</field>
+      <field>open_acks</field>
+    </artifact>
+
+    <artifact name="Tracking Tables (progress.md)">
+      <table id="unit_tracking">
+        <header><cell>Unit</cell><cell>Wave</cell><cell>Requirement</cell><cell>Status</cell><cell>Test</cell><cell>Commit</cell><cell>Evidence</cell><cell>ACKs closed</cell></header>
+      </table>
+      <table id="ack_tracking">
+        <header><cell>ACK</cell><cell>Severity</cell><cell>Dimension</cell><cell>State</cell><cell>Owner</cell><cell>Expiry</cell><cell>Evidence</cell></header>
+      </table>
+      <table id="risk_tracking">
+        <header><cell>Risk</cell><cell>Trigger</cell><cell>Blast radius</cell><cell>Mitigation</cell><cell>Rollback</cell><cell>Owner</cell></header>
+      </table>
+      <table id="platform_tracking">
+        <header><cell>Platform</cell><cell>Version</cell><cell>Smoke test</cell><cell>Status</cell><cell>Owner</cell></header>
+      </table>
+      <table id="contract_tracking">
+        <header><cell>Contract</cell><cell>Shape</cell><cell>Validation</cell><cell>Error values</cell><cell>Consumer</cell></header>
+      </table>
+    </artifact>
+  </artifacts>
+
+  <!-- ============================================================ -->
+  <validators>
+    <validator id="V1" gate="G0">Mode classified; verbatim request stored; every ambiguity has an ACK.</validator>
+    <validator id="V2" gate="G1">findings.md non-empty; git state recorded; every file to be touched located or its absence ACKed; prior discussion swept.</validator>
+    <validator id="V3" gate="G2">At least three alternatives; strongest counter-argument present; failure-mode enumeration covers every category in P2; every concern has an ACK.</validator>
+    <validator id="V4" gate="G3">Every requirement has an ID, a test, and an acceptance criterion; non-goals listed; all contracts and budgets present; platform matrix present; version strategy present.</validator>
+    <validator id="V5" gate="G4">Task graph acyclic; every leaf traces to a requirement; every unit has the full contract block; no two units in a wave share a write scope; every irreversible unit has rollback instructions.</validator>
+    <validator id="V6" gate="G5">All eight personas produced findings; coverage matrix has no empty mechanism; traceability sweep clean both directions; contradiction sweep clean; assumption sweep complete.</validator>
+    <validator id="V7" gate="G6">Every research-requiring ACK has a source, date, and confidence; amendments diffed; amended sections re-validated.</validator>
+    <validator id="V8" gate="G7">Alignment Report has all five sections; ledger has zero OPEN; every DEFERRED has owner and expiry; every RISK-ACCEPTED has signature; explicit acceptance recorded; attestation written.</validator>
+    <validator id="V9" gate="G8">Every executed unit has evidence; every commit has a passing test; no file touched outside scope; no test weakened; no warning suppressed without an ACK; bug log current.</validator>
+    <validator id="V10" gate="G9">Every requirement evidenced; every ACK terminal; full suite, lint, type check, build, platform smoke all green; handoff written; retro names at least one missed concern; final attestation written.</validator>
+    <validator id="V11" gate="any">Manifest completeness: manifest item count equals expected checklist count for the phase; every N/A has a reason.</validator>
+    <validator id="V12" gate="any">Silence check: for every phase, at least one ACK was considered and explicitly rejected with reason, or a justification is written for why the phase genuinely produced none.</validator>
+  </validators>
+
+  <!-- ============================================================ -->
+  <hooks>
+    <hook event="SessionStart">Re-read plan.md header, task_plan.md, acks.md open items; inject plan head; run reconciliation.</hook>
+    <hook event="UserPromptSubmit">Re-inject plan head (byte-identical header for cache stability); if the prompt contradicts the plan, emit an ACK and halt execution until resolved.</hook>
+    <hook event="PreCompact">Write a compaction-safe summary to task_plan.md; flush any in-memory decision to decisions.md.</hook>
+    <hook event="PreToolUse" matcher="write|edit">Verify the target path is inside the current unit's write scope; otherwise block and emit an ACK.</hook>
+    <hook event="PreToolUse" matcher="bash">Verify the command is not a forbidden operation (push, merge, deploy, rm -rf, secret read) without policy authorisation.</hook>
+    <hook event="PostToolUse" matcher="bash">Append command, exit code, and output digest to evidence.md.</hook>
+    <hook event="Stop">Hold if any unit is in_progress or any ACK is BLOCKED; fire stall detection after N units with no state change.</hook>
+  </hooks>
+
+  <!-- ============================================================ -->
+  <failure_modes>
+    <description>How this skill can still fail, and the mitigation built in. Listed so that the skill itself obeys its own silence rule.</description>
+    <table id="self_critique">
+      <header><cell>Failure mode</cell><cell>Symptom</cell><cell>Mitigation</cell></header>
+      <row><cell>Ledger theatre</cell><cell>Hundreds of trivial ACKs, real risks unnamed</cell><cell>S1 severity requires evidence to close; Sceptic persona must find an unledgered concern</cell></row>
+      <row><cell>Manifest padding</cell><cell>Everything marked N/A</cell><cell>N/A requires a specific reason; V11 rejects generic reasons</cell></row>
+      <row><cell>Over-planning</cell><cell>Days of planning for a one-line fix</cell><cell>Mode M1 and depth selection; P6 and P9 may be skipped by declaration with an ACK</cell></row>
+      <row><cell>Stale plan</cell><cell>Plan diverges from repo</cell><cell>Reconciliation on every resume; reality wins; invalidated units re-open ACKs</cell></row>
+      <row><cell>Context rot</cell><cell>Agent forgets the goal mid-execution</cell><cell>Per-turn injection; filesystem as disk; compaction hook</cell></row>
+      <row><cell>Approval bypass</cell><cell>Agent proceeds without human sign-off</cell><cell>G7 is never auto-passed; queue.md is the only execution authority</cell></row>
+      <row><cell>Optimization creep</cell><cell>Premature performance work</cell><cell>Optimization requires a budget reference from P3; otherwise forbidden</cell></row>
+      <row><cell>Test weakening</cell><cell>Suite green because tests were gutted</cell><cell>Guardrail plus V9 plus diff review of test files in evidence</cell></row>
+      <row><cell>Persona theatre</cell><cell>Eight personas saying "looks good"</cell><cell>Adversary must produce five findings or justify impossibility; findings are ACKs, not prose</cell></row>
+      <row><cell>XML drift</cell><cell>Agents reformat the skill and lose rules</cell><cell>Skill is versioned; validators are declarative; any amendment bumps skill_version</cell></row>
+    </table>
+  </failure_modes>
+
+  <!-- ============================================================ -->
+  <quickstart>
+    <step order="1">Load SKILL.xml. Create the workspace files listed in persistence_layer.</step>
+    <step order="2">Write the verbatim request to intake.md and classify mode. Emit ambiguity ACKs.</step>
+    <step order="3">Run P1 Ground against the real repository. Write findings.md and codebase-map.md.</step>
+    <step order="4">Run P2 Challenge. Produce three alternatives and the strongest counter-argument. Fill risk-register.md.</step>
+    <step order="5">Run the five-axis gap audit. Every axis yields ACKs or a specific no-findings sentence.</step>
+    <step order="6">Run P3 Define. Stable R-IDs, non-goals, contracts, budgets, platform matrix, version strategy.</step>
+    <step order="7">Run P4 Structure. HTN decomposition to 2–5 minute units with full contract blocks and waves.</step>
+    <step order="8">Run P5 Validate with all eight personas. Reconcile every finding into the ledger.</step>
+    <step order="9">Run P6 Deepen for any ACK requiring research. Diff and re-validate amendments.</step>
+    <step order="10">Emit the Alignment Report and Queue. Obtain explicit acceptance. Write the attestation.</step>
+    <step order="11">Execute from the Queue only. TDD loop, evidence, commits, bug log, reconciliation on resume.</step>
+    <step order="12">Close: verify all requirements evidenced, all ACKs terminal, full checks green, handoff and retro written, final attestation recorded.</step>
+  </quickstart>
+
+  <!-- ============================================================ -->
+  <closing_law>
+    The plan is not done when it looks complete. The plan is done when every concern that could be raised has been raised, numbered, and answered — and when the evidence that it was raised is on disk where a stranger can find it. Anything less is not a plan; it is a hope with formatting.
+  </closing_law>
+
+</skill>
